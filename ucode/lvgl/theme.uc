@@ -1,7 +1,7 @@
 'use strict';
 
 import * as lv from 'lv';
-import { FONT_SEMI_21 } from 'lvgl.assets';
+import { display, layout } from 'lvgl.board';
 
 /*
  * A name says what a colour is for, not what it looks like. Nine of the sixteen
@@ -52,46 +52,37 @@ export const C_OK	= 0x32d74b;
 export const C_WARN	= 0xff9f0a;
 export const C_ALERT	= 0xff453a;
 
-export const W		= 320;
-export const H		= 240;
+export const W		= display.width;
+export const H		= display.height;
 
 /* Cards are full bleed: they meet the top and both sides of the glass, and only
    the bottom is held back, to clear the page dots. */
 export const CARD_X	= 0;
 export const CARD_W	= W;
-export const CARD_PAD	= 10;
-export const CARD_RADIUS = 12;
-export const SEP_H	= 1;
+export const CARD_PAD	= min(layout.card.padding, int((CARD_W - 1) / 2));
+export const CARD_RADIUS = layout.card.radius;
+export const SEP_H	= layout.card.separator;
 
 /* Negative tracking, which the display sizes of Inter want and the small ones do not. */
-export const TRACK_SPACE = -2;
+export const TRACK_SPACE = layout.typography.tracking;
 
 /*
  * The v3 grid. A list group is inset from both edges and rounded, unlike the
  * full bleed cards above it, because a list of rows reads as one object sitting
  * on the glass rather than as the glass itself.
  */
-export const GROUP_X	= 10;
+export const GROUP_X	= min(layout.group.inset, int((W - 1) / 2));
 export const GROUP_W	= W - 2 * GROUP_X;
-export const GROUP_RADIUS = 9;
+export const GROUP_RADIUS = layout.group.radius;
 
 /*
- * A root shows three rows and a sub page four. The glass is small and a root is
- * what the panel is read at across a desk, so it spends its height on fewer,
- * larger rows; a sub page is read at arm's length and carries more detail, so
- * it packs tighter. The separator is inset by ROW_PAD at both ends, so it stops
- * where the text does on either side.
- *
- * A root fills its space exactly: 3 x 60 plus 2 hairlines is 182 of the 184 it
- * has under a fixed header. A sub page has the same 184 and four rows come to
- * 195, so a full one scrolls inside its card by 11 px. That is deliberate: the
- * alternative was letting sub pages run to the bottom edge while roots stop
- * short of it.
+ * Root rows are read at a distance and use a larger tier. Subpages pack more
+ * detail into the same space. The separator ends where the text starts.
  */
-export const ROW_H	= 48;
-export const ROW_H_ROOT	= 60;
-export const ROW_PAD	= 11;
-export const ROW_GAP	= 9;
+export const ROW_H	= layout.row.height;
+export const ROW_H_ROOT	= layout.row.root_height;
+export const ROW_PAD	= min(layout.row.padding, int((GROUP_W - 1) / 2));
+export const ROW_GAP	= layout.row.gap;
 
 /*
  * The header does not scroll. v3 had it as the first item of the scroll
@@ -99,30 +90,31 @@ export const ROW_GAP	= 9;
  * page loses the only thing naming it as soon as the list moves, and the back
  * circle would go with it. Header and back stay put; only the payload scrolls.
  */
-export const HEAD_TOP	= 11;
-export const HEAD_X	= 12;
-export const HEAD_BOTTOM = 7;
-export const HEAD_INDENT = 40;
+export const HEAD_TOP	= layout.header.top;
+export const HEAD_X	= layout.header.left;
+export const HEAD_BOTTOM = layout.header.bottom;
+export const HEAD_INDENT = layout.header.subpage_left;
+export const HEAD_FONT	= layout.fonts.header;
 
 /*
  * The lock sits opposite the header on every page that can be left, and is the
  * way out: it puts the panel back to idle at once, which with a PIN set means
  * the next person has to enter it. The icon is small, so the hit area is not.
  */
-export const LOCK_SIZE	= 14;
-export const LOCK_X	= W - 12 - LOCK_SIZE;
-export const LOCK_Y	= 15;
-export const LOCK_HIT	= 44;
+export const LOCK_SIZE	= 14;	/* Width of the bundled lock image. */
+export const LOCK_X	= W - layout.lock.right - LOCK_SIZE;
+export const LOCK_Y	= layout.lock.top;
+export const LOCK_HIT	= layout.lock.hit_size;
 
 /* The back circle floats over the content rather than sitting in a bar. */
-export const BACK_SIZE	= 28;
-export const BACK_X	= 6;
-export const BACK_Y	= 6;
+export const BACK_SIZE	= layout.back.size;
+export const BACK_X	= layout.back.left;
+export const BACK_Y	= layout.back.top;
 
 /* Page dots, roots only. */
-export const DOT_SIZE	= 5;
-export const DOT_GAP	= 10;
-export const DOT_BOTTOM	= 5;
+export const DOT_SIZE	= layout.dots.size;
+export const DOT_GAP	= layout.dots.gap;
+export const DOT_BOTTOM	= layout.dots.bottom;
 
 /*
  * Both stop the same distance above the bottom of the glass. A root spends that
@@ -130,7 +122,7 @@ export const DOT_BOTTOM	= 5;
  * the edge on one and not on the other would read as a mistake, and the rounded
  * foot that says where a list ends would be off screen on the sub page.
  */
-export const LIST_H	= H - 12;
+export const LIST_H	= max(1, H - layout.card.bottom);
 export const LIST_H_SUB	= LIST_H;
 
 /*
@@ -138,7 +130,7 @@ export const LIST_H_SUB	= LIST_H;
  * rather than copied out of it, so it cannot drift when the fonts are cut
  * again. Regenerating the set once already moved every line height by a pixel.
  */
-export const HEAD_H	= HEAD_TOP + lv.font_line_height(FONT_SEMI_21) + HEAD_BOTTOM;
+export const HEAD_H	= HEAD_TOP + lv.font_line_height(HEAD_FONT) + HEAD_BOTTOM;
 
 /*
  * The strip a page draws into, under the fixed header. Nine pages held back
@@ -146,13 +138,13 @@ export const HEAD_H	= HEAD_TOP + lv.font_line_height(FONT_SEMI_21) + HEAD_BOTTOM
  * so there is one of it here and none of them keeps its own.
  */
 export const BODY_Y	= HEAD_H;
-export const BODY_H	= LIST_H - HEAD_H;
+export const BODY_H	= max(1, LIST_H - HEAD_H);
 
 /*
  * A rule drawn across a page that has no card. The separator inside a group is
  * a different idea and keeps its own inset, which is left aligned only.
  */
-export const RULE_PAD	= 14;
+export const RULE_PAD	= layout.card.rule_inset;
 
 /*
  * The weather page. The sky glyphs are the one thing on the panel that is not

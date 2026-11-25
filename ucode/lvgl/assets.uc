@@ -9,7 +9,7 @@ lv.init();
 const FONT_DIR	= '/usr/share/lvgl/fonts';
 const ICON_DIR	= '/usr/share/lvgl/icons';
 
-function face(name) {
+export function face(name) {
 	return lv.font_load(sprintf('%s/%s.bin', FONT_DIR, name));
 }
 

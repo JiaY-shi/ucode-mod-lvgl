@@ -1,19 +1,20 @@
 'use strict';
 
 import * as lv from 'lv';
+import { layout } from 'lvgl.board';
 import { C_SCREEN, C_TXT } from 'lvgl.theme';
 import { box_new } from 'lvgl.widget';
 
 /* The plate is the quiet zone a reader needs, which the panel's background
    cannot provide: it is neither white nor even. */
-const QR_SIZE	= 112;
-const QR_PAD	= 10;
-const PLATE_R	= 6;
+const QR_SIZE	= layout.qr.size;
+const QR_PAD	= layout.qr.padding;
+const PLATE_R	= layout.qr.radius;
 
 export const PLATE = QR_SIZE + 2 * QR_PAD;
 
 /* Between the plate and the line naming what the code joins. */
-export const CAP_GAP = 10;
+export const CAP_GAP = layout.qr.caption_gap;
 
 /**
  * qrplate_new - a QR code on its plate

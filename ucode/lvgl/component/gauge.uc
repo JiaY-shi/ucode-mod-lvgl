@@ -1,7 +1,7 @@
 'use strict';
 
 import * as lv from 'lv';
-import { FONT_SEMI_15, FONT_REG_15 } from 'lvgl.assets';
+import { layout } from 'lvgl.board';
 import { C_RULE, C_TXT } from 'lvgl.theme';
 import { threshold_colour } from 'lvgl.threshold';
 import { flow_new } from 'lvgl.layout';
@@ -9,15 +9,12 @@ import { label_new, text_new, text_set } from 'lvgl.widget';
 
 const ROTATION	= 135;
 const SPAN	= 270;
-const WIDTH	= 5;
 const ANIM_MS	= 300;
 
 const SWEEP_LOW	 = 0;
 const SWEEP_HIGH = 100;
 
-const SIZE	= 72;
-const GAP	= 10;
-const EDGE	= 20;
+const geometry = layout.gauge;
 
 function sweep_of(value, low, high) {
 	let sweep = int((value - low) * 100 / (high - low));
@@ -34,7 +31,7 @@ function sweep_of(value, low, high) {
 function ring_new(parent) {
 	let arc = lv.arc(parent);
 
-	arc.set({ w: SIZE, h: SIZE });
+	arc.set({ w: geometry.size, h: geometry.size });
 	arc.rotation(ROTATION);
 	arc.bg_angles(0, SPAN);
 	arc.range(SWEEP_LOW, SWEEP_HIGH);
@@ -44,20 +41,21 @@ function ring_new(parent) {
 	arc.scrollable(false);
 	/* The unfilled track is C_RULE: a gauge's empty part and the line between
 	   two rows are one idea and take one colour. */
-	arc.style({ arc_width: WIDTH, arc_rounded: true, arc_color: C_RULE,
+	arc.style({ arc_width: geometry.stroke, arc_rounded: true, arc_color: C_RULE,
 		    bg_opa: lv.OPA_TRANSP, border_width: 0, pad_all: 0 });
-	arc.style({ arc_width: WIDTH, arc_rounded: true, arc_color: C_RULE },
+	arc.style({ arc_width: geometry.stroke, arc_rounded: true, arc_color: C_RULE },
 		  lv.PART_INDICATOR);
 
 	return arc;
 }
 
 /**
- * gauge_new - an arc with its reading inside it and a caption beside it
+ * gauge_new - an arc with its reading inside it and a caption beside or below it
  * @parent: the cell it fills
  * @opts: caption; side, left or right, for the edge the ring goes to; unit, the
  *	  one character the reading ends in; low and high, the range mapped onto
- *	  the travel, 0 and 100 by default
+ *	  the travel, 0 and 100 by default; direction, gap and edge override the
+ *	  board layout
  *
  * Sweep and colour are separate inputs: a range mapped onto the travel still
  * takes its colour from the raw reading. The arc is coloured and the number is
@@ -71,23 +69,30 @@ export function gauge_new(parent, opts) {
 	let low = opts.low ?? SWEEP_LOW;
 	let high = opts.high ?? SWEEP_HIGH;
 	let unit = opts.unit ?? '';
-	let root = flow_new(parent, { dir: 'row', gap: GAP, cross: 'centre',
-				      main: right ? 'end' : 'start' });
+	let dir = opts.direction ?? geometry.direction;
+	let column = dir == 'column';
+	let first = column || !right;
+	let edge = opts.edge ?? geometry.edge;
+	let root = flow_new(parent, { dir, gap: opts.gap ?? geometry.gap, cross: 'centre',
+				      main: column ? 'centre' : right ? 'end' : 'start' });
 	let arc;
 
-	root.style(right ? { pad_right: EDGE } : { pad_left: EDGE });
+	if (column)
+		root.style({ pad_left: edge, pad_right: edge });
+	else
+		root.style(right ? { pad_right: edge } : { pad_left: edge });
 
-	if (!right)
+	if (first)
 		arc = ring_new(root);
 
-	let caption = label_new(root, FONT_REG_15, C_TXT, opts.caption);
+	let caption = label_new(root, layout.fonts.gauge_caption, C_TXT, opts.caption);
 
 	caption.style({ pad_all: 0, border_width: 0 });
 
-	if (right)
+	if (!first)
 		arc = ring_new(root);
 
-	let reading = text_new(arc, FONT_SEMI_15, C_TXT, '');
+	let reading = text_new(arc, layout.fonts.gauge_reading, C_TXT, '');
 
 	reading.obj.set({ align: lv.ALIGN_CENTER });
 

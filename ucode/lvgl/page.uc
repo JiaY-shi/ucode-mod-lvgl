@@ -1,8 +1,9 @@
 'use strict';
 
 import * as lv from 'lv';
+import { layout } from 'lvgl.board';
 import { C_SCREEN, C_IDLE, C_TXT_DIM, C_RAISED, C_TXT, W, H, DOT_SIZE, DOT_GAP,
-	 DOT_BOTTOM, BACK_SIZE, BACK_X, BACK_Y, LOCK_SIZE, LOCK_X, LOCK_Y,
+	 DOT_BOTTOM, BACK_SIZE, BACK_X, BACK_Y, LOCK_X, LOCK_Y,
 	 LOCK_HIT } from 'lvgl.theme';
 import { box_new } from 'lvgl.widget';
 import { subpage_load } from 'lvgl.loader';
@@ -292,7 +293,7 @@ function back_build(parent) {
 	mark.src(IMAGE_BACK);
 	mark.style({ image_recolor: C_TXT, image_recolor_opa: lv.OPA_COVER });
 	/* A chevron points away from its optical centre, so nudge it back. */
-	mark.set({ align: lv.ALIGN_CENTER, align_x: -1 });
+	mark.set({ align: lv.ALIGN_CENTER, align_x: layout.back.icon_x });
 	mark.clickable(false);
 
 	obj.on(lv.EVENT_CLICKED, function() {

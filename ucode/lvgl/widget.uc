@@ -1,13 +1,12 @@
 'use strict';
 
 import * as lv from 'lv';
-import { FONT_TNUM_12, FONT_TNUM_10, FONT_REG_15, FONT_REG_11, FONT_SEMI_21,
-	 FONT_SEMI_15, FONT_REG_13, IMAGE_CHEVRON, IMAGE_EYE,
-	 IMAGE_EYE_OFF } from 'lvgl.assets';
+import { IMAGE_CHEVRON, IMAGE_EYE, IMAGE_EYE_OFF } from 'lvgl.assets';
+import { layout } from 'lvgl.board';
 import { C_SCREEN, C_SURFACE, C_RULE, C_TXT, C_ACTION, CARD_X, CARD_W,
 	 CARD_PAD, CARD_RADIUS, SEP_H, C_TXT_DIM, C_RAISED, C_IDLE, C_DOWN,
-	 C_OK, C_ALERT, H, GROUP_X, GROUP_W, GROUP_RADIUS, ROW_H, ROW_PAD,
-	 ROW_GAP, HEAD_TOP, HEAD_X, HEAD_BOTTOM, HEAD_INDENT,
+	 C_OK, C_ALERT, W, H, GROUP_X, GROUP_W, GROUP_RADIUS, ROW_H, ROW_PAD,
+	 ROW_GAP, HEAD_TOP, HEAD_X, HEAD_FONT, HEAD_INDENT,
 	 HEAD_H as HEAD_H_THEME, LIST_H } from 'lvgl.theme';
 
 /* It belongs to the grid in theme.uc now. Still exported from here, because
@@ -16,12 +15,13 @@ export const HEAD_H = HEAD_H_THEME;
 
 let activity;
 
-const BAR_GAP	 = 2;
-const BAR_RADIUS = 1;
+const fonts = layout.fonts;
+const BAR_GAP	 = layout.chart.gap;
+const BAR_RADIUS = layout.chart.radius;
 
 export const BAR_SCALE = 1000;
 
-const BAR_MIN_PX = 2;
+const BAR_MIN_PX = layout.chart.min_bar_height;
 
 /**
  * bar_scaled - map a raw reading onto the fixed chart axis
@@ -47,7 +47,7 @@ export function bar_scaled(value, full, height) {
 	if (height == null)
 		return scaled;
 
-	let floor = int((BAR_MIN_PX * BAR_SCALE + height - 1) / height);
+	let floor = int((min(BAR_MIN_PX, height) * BAR_SCALE + height - 1) / height);
 
 	return scaled > floor ? scaled : floor;
 };
@@ -91,7 +91,7 @@ export function text_new(parent, font, colour, text) {
  * Return: the label object, indented to the row text column.
  */
 export function empty_new(parent, text) {
-	let label = label_new(parent, FONT_REG_13, C_TXT, text);
+	let label = label_new(parent, fonts.empty, C_TXT, text);
 
 	label.set({ x: GROUP_X + ROW_PAD, y: 0 });
 
@@ -253,28 +253,31 @@ export function scroll_new(parent, x, y, w, h) {
 };
 
 /* Read from the faces rather than copied out of them. */
-const LINE_UNIT		= lv.font_line_height(FONT_REG_13);
-const LINE_CAPTION	= lv.font_line_height(FONT_REG_11);
-const LINE_BODY_H	= lv.font_line_height(FONT_REG_15);
-const LINE_ADDR		= lv.font_line_height(FONT_TNUM_12);
-const LINE_ADDR_SM	= lv.font_line_height(FONT_TNUM_10);
-const LINE_GAP		= 1;
+const LINE_UNIT		= lv.font_line_height(fonts.row_title);
+const LINE_CAPTION	= lv.font_line_height(fonts.stacked_caption);
+const LINE_ADDR		= lv.font_line_height(fonts.stacked_value);
+const LINE_ADDR_SM	= lv.font_line_height(fonts.stacked_small_value);
+const LINE_GAP		= layout.row.line_gap;
 
-const TIER_LARGE = { label: FONT_REG_15, label_h: LINE_BODY_H,
-		     second: FONT_REG_13, second_h: LINE_UNIT };
-const TIER_SMALL = { label: FONT_REG_13, label_h: LINE_UNIT,
-		     second: FONT_REG_11, second_h: LINE_CAPTION };
+const TIER_LARGE = {
+	label: fonts.root_row_title, label_h: lv.font_line_height(fonts.root_row_title),
+	second: fonts.root_row_detail, second_h: lv.font_line_height(fonts.root_row_detail)
+};
+const TIER_SMALL = {
+	label: fonts.row_title, label_h: LINE_UNIT,
+	second: fonts.row_detail, second_h: lv.font_line_height(fonts.row_detail)
+};
 
-const DOT_R		= 7;
-const ICON_SLOT		= 22;
+const DOT_R		= layout.row.status_size;
+const ICON_SLOT		= layout.row.icon_slot;
 const ICON_H		= 17;
 const CHEVRON		= 24;
 const EYE		= 16;
 
-const SWITCH_W		= 38;
-const SWITCH_H		= 22;
-const KNOB		= 18;
-const KNOB_PAD		= 2;
+const SWITCH_W		= layout.switch.width;
+const SWITCH_H		= layout.switch.height;
+const KNOB_PAD		= min(layout.switch.knob_padding, int(min(SWITCH_W, SWITCH_H) / 2));
+const KNOB		= min(layout.switch.knob_size, min(SWITCH_W, SWITCH_H) - 2 * KNOB_PAD);
 
 /**
  * icon_new - draw a coverage mark in a colour
@@ -304,19 +307,34 @@ export function icon_new(parent, image, colour) {
  * Return: the title label.
  */
 export function header_new(parent, title, indented, count) {
+	let header = layout.header;
 	let x = indented ? HEAD_INDENT : HEAD_X;
-	let label = label_new(parent, FONT_SEMI_21, C_TXT, title);
+	let inset = indented ? header.subpage_right_inset : header.right_inset;
+	let label = label_new(parent, HEAD_FONT, C_TXT, title);
+	let line_height = lv.font_line_height(HEAD_FONT);
+	let available;
 
 	label.set({ x, y: HEAD_TOP });
+
+	if (inset || header.count_width) {
+		let reserve = count == null ? 0 : header.count_gap +
+			      max(header.count_width, lv.text_width(fonts.header_count, '' + count));
+
+		available = max(1, W - x - inset - reserve);
+		label.set({ w: available, h: line_height });
+		label.long_mode(lv.LABEL_LONG_DOTS);
+	}
 
 	if (count == null)
 		return label;
 
-	let after = x + lv.text_width(FONT_SEMI_21, title) + 5;
-	let tally = label_new(parent, FONT_REG_13, C_RULE, count);
+	let title_width = lv.text_width(HEAD_FONT, title);
+	let after = x + min(title_width, available ?? title_width) + header.count_gap;
+	let tally = label_new(parent, fonts.header_count, C_RULE, count);
+	let top = HEAD_TOP + line_height -
+		  lv.font_line_height(fonts.header_count) - header.count_bottom;
 
-	tally.set({ x: after,
-		    y: HEAD_TOP + lv.font_line_height(FONT_SEMI_21) - LINE_UNIT - 2 });
+	tally.set({ x: after, y: top });
 
 	return label;
 };
@@ -445,9 +463,9 @@ export function switch_new(parent, x, y, on, on_change) {
 };
 
 const SIG_BARS	= 4;
-const SIG_W	= 3;
-const SIG_GAP	= 2;
-const SIG_STEP	= 3;
+const SIG_W	= layout.signal.bar_width;
+const SIG_GAP	= layout.signal.gap;
+const SIG_STEP	= layout.signal.height_step;
 const SIG_W_ALL	= SIG_BARS * SIG_W + (SIG_BARS - 1) * SIG_GAP;
 
 /**
@@ -601,7 +619,7 @@ export function row_new(group, y, opts) {
 
 	let entry = { obj: row };
 	let used = row_accessory(row, entry, opts.accessory, opts, h);
-	let right = GROUP_W - ROW_PAD - (used ? used + 5 : 0);
+	let right = GROUP_W - ROW_PAD - (used ? used + layout.row.accessory_gap : 0);
 
 	if (opts.signal != null) {
 		right -= SIG_W_ALL + ROW_GAP;
@@ -611,7 +629,7 @@ export function row_new(group, y, opts) {
 					  opts.signal);
 	}
 
-	let avail = right - left;
+	let avail = max(1, right - left);
 
 	if (opts.secondary != null) {
 		let block = tier.label_h + LINE_GAP + tier.second_h;
@@ -638,7 +656,7 @@ export function row_new(group, y, opts) {
 		entry.value = text_new(row, font, opts.value_colour ?? C_TXT_DIM,
 				       opts.value);
 		entry.value.obj.set({ x: left, y: int((h - font_h) / 2),
-				      w: right - left });
+				      w: avail });
 		entry.value.obj.style({ text_align: lv.TEXT_ALIGN_RIGHT });
 	}
 
@@ -692,19 +710,19 @@ export function row_stacked_new(group, y, caption, value, h) {
 	let widest = 0;
 
 	for (let line in lines) {
-		let w = lv.text_width(FONT_TNUM_12, line);
+		let w = lv.text_width(fonts.stacked_value, line);
 
 		if (w > widest)
 			widest = w;
 	}
 
 	let fits = widest <= avail;
-	let font = fits ? FONT_TNUM_12 : FONT_TNUM_10;
+	let font = fits ? fonts.stacked_value : fonts.stacked_small_value;
 	let step = fits ? LINE_ADDR : LINE_ADDR_SM;
 	let top = int((height - (LINE_CAPTION + LINE_GAP +
 				 length(lines) * step)) / 2);
 
-	label_new(row, FONT_REG_11, C_TXT_DIM, caption)
+	label_new(row, fonts.stacked_caption, C_TXT_DIM, caption)
 		.set({ x: ROW_PAD, y: top });
 	label_new(row, font, C_TXT, value)
 		.set({ x: ROW_PAD, y: top + LINE_CAPTION + LINE_GAP });
@@ -726,15 +744,14 @@ export function row_stacked_height(value, h) {
 const SCRIM_OPA		= 196;	/* 77 per cent */
 const DIALOG_OPA	= 247;
 
-const DIALOG_X		= 34;
+const DIALOG_X		= min(layout.dialog.inset, int((CARD_W - 1) / 2));
 const DIALOG_W		= CARD_W - 2 * DIALOG_X;
-const DIALOG_RADIUS	= 13;
-const DIALOG_PAD	= 15;
-const DIALOG_BOTTOM	= 13;
-const DIALOG_GAP	= 5;
-const LINE_BODY		= 19;
-const BUTTON_PAD	= 10;
-const BUTTON_H		= BUTTON_PAD + LINE_BODY + BUTTON_PAD;
+const DIALOG_RADIUS	= layout.dialog.radius;
+const DIALOG_PAD	= min(layout.dialog.padding, int((DIALOG_W - 1) / 2));
+const DIALOG_BOTTOM	= layout.dialog.bottom;
+const DIALOG_GAP	= layout.dialog.gap;
+const BUTTON_PAD	= layout.dialog.button_padding;
+const BUTTON_H		= 2 * BUTTON_PAD + lv.font_line_height(fonts.dialog_button);
 
 /**
  * dialog_new - a question over a scrim
@@ -765,42 +782,31 @@ export function dialog_new(parent, opts) {
 	});
 
 	let avail = DIALOG_W - 2 * DIALOG_PAD;
-	let lines = 0;
-
-	for (let para in split(opts.body, '\n')) {
-		let wide = int((lv.text_width(FONT_REG_11, para) + avail - 1) /
-			       avail);
-
-		lines += wide > 0 ? wide : 1;
-	}
-
-	if (lines < 1)
-		lines = 1;
-
-	let head = DIALOG_PAD + LINE_BODY + DIALOG_GAP + lines * LINE_CAPTION +
-		   DIALOG_BOTTOM;
+	let align = opts.align ?? lv.TEXT_ALIGN_CENTER;
 	let box = lv.obj(scrim);
 
-	let tall = head + SEP_H + BUTTON_H;
-
-	box.set({ x: DIALOG_X, y: int((H - tall) / 2), w: DIALOG_W, h: tall });
+	box.set({ x: DIALOG_X, w: DIALOG_W });
 	box.style({ bg_color: C_RAISED, bg_opa: DIALOG_OPA,
 		    radius: DIALOG_RADIUS, border_width: 0, pad_all: 0 });
 	box.clickable(false);
 	box.scrollable(false);
 
-	let align = opts.align ?? lv.TEXT_ALIGN_CENTER;
 	let indent = align == lv.TEXT_ALIGN_CENTER ? 0 : DIALOG_PAD;
-	let title = label_new(box, FONT_SEMI_15, C_TXT, opts.title);
+	let title = label_new(box, fonts.dialog_title, C_TXT, opts.title);
 
 	title.set({ x: indent, y: DIALOG_PAD, w: DIALOG_W - 2 * indent });
 	title.style({ text_align: align });
 
-	let body = label_new(box, FONT_REG_11, C_TXT_DIM, opts.body);
+	let body_y = DIALOG_PAD + title.height() + DIALOG_GAP;
+	let body = label_new(box, fonts.dialog_body, C_TXT_DIM, opts.body);
 
-	body.set({ x: DIALOG_PAD, y: DIALOG_PAD + LINE_BODY + DIALOG_GAP,
-		   w: avail });
+	body.set({ x: DIALOG_PAD, y: body_y, w: avail });
 	body.style({ text_align: align });
+
+	let head = body_y + body.height() + DIALOG_BOTTOM;
+	let tall = head + SEP_H + BUTTON_H;
+
+	box.set({ y: int((H - tall) / 2), h: tall });
 
 	let rule = box_new(box, C_DOWN, 0);
 
@@ -836,7 +842,7 @@ export function dialog_new(parent, opts) {
 		button.clickable(true);
 		button.scrollable(false);
 
-		let text = label_new(button, FONT_REG_15,
+		let text = label_new(button, fonts.dialog_button,
 				     choice.color ?? C_ACTION, choice.text);
 
 		text.set({ x: 0, y: BUTTON_PAD, w: width });
@@ -867,7 +873,7 @@ export function list_new(parent, opts) {
 
 	let area = lv.obj(parent);
 
-	area.set({ x: 0, y: HEAD_H, w: CARD_W, h: height - HEAD_H });
+	area.set({ x: 0, y: HEAD_H, w: CARD_W, h: max(1, height - HEAD_H) });
 	area.style({ bg_opa: lv.OPA_TRANSP, border_width: 0, pad_all: 0,
 		     radius: 0 });
 	area.clickable(false);
